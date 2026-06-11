@@ -43,15 +43,17 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 // continuous formula using exact spin RPM and exact distance.
 //
 // Formula:
-//   omega     = spin_rpm * 2*pi/60          (rad/s)
-//   S         = r * omega / v_release       (spin parameter, dimensionless)
-//   CD_eff    = kCD0 - kCDspin * S          (effective drag coeff)
-//   k_eff     = kAeroFactor * CD_eff        (drag decay constant, 1/m)
+//   omega     = spin_rpm * 2*pi/60               (rad/s)
+//   S         = r * omega / v_release            (spin parameter, dimensionless)
+//   CD0       = cd0ForDistance(dist_m)           (distance-dependent baseline drag)
+//   CD_eff    = CD0 - kCDspin * S               (effective drag coeff)
+//   k_eff     = kAeroFactor * CD_eff            (drag decay constant, 1/m)
 //   multiplier = exp(-k_eff * dist_m)
 //
-// Constants fit to empirical table (40-54 ft range, v_ref = 20 m/s):
-//   CD0 = 0.2675, alpha_spin = 0.2529
-//   RMS error vs old table: ~1.7 percentage points
+// CD0 calibration source:
+//   30-40 ft: Stalker radar gun measurements (confirmed)
+//   25 ft:    Stalker measurement flagged anomalous (possible short-range artifact)
+//   44-54 ft: Held at 40ft value pending further calibration
 //
 // Supported distance range: 25-54 ft (7.62-16.46 m)
 // Spin range: any RPM (no clamping to bins)
@@ -64,20 +66,57 @@ namespace drag {
     constexpr double kBallMass_kg  = 0.1417;
     constexpr double kAeroFactor   = kAirDensity * kBallArea_m2 / (2.0 * kBallMass_kg);
 
-    // Fit to empirical table; higher spin → smaller CD (backspin lift effect)
-    constexpr double kCD0    = 0.2675;
+    // Spin correction — higher spin → smaller CD (backspin lift effect)
     constexpr double kCDspin = 0.2529;
+
+    // Distance-dependent CD0 calibration table
+    // CD0 shifts with distance because drag behaves differently at short vs long range.
+    // Each entry: { distance_m, CD0 }
+    // Interpolated linearly between points; clamped at ends.
+    //
+    //  25ft (7.62m):  0.820  — Stalker-measured, flagged anomalous (short-range artifact)
+    //  30ft (9.14m):  0.493  — Stalker-confirmed
+    //  35ft (10.67m): 0.483  — Stalker-confirmed
+    //  40ft (12.19m): 0.486  — Stalker-confirmed
+    //  54ft (16.46m): 0.486  — held flat, pending calibration data at longer distances
+    struct CD0Point { double dist_m; double CD0; };
+    inline constexpr CD0Point kCD0Table[] = {
+        {  7.620, 0.820 },
+        {  9.144, 0.493 },
+        { 10.668, 0.483 },
+        { 12.192, 0.486 },
+        { 16.459, 0.486 },
+    };
+    inline constexpr int kCD0TableSize = 5;
+}
+
+// Returns the distance-dependent CD0 baseline drag coefficient.
+// Linearly interpolates between calibrated points.
+inline double cd0ForDistance(double dist_m) {
+    const auto* t = drag::kCD0Table;
+    const int   n = drag::kCD0TableSize;
+    if (dist_m <= t[0].dist_m)     return t[0].CD0;
+    if (dist_m >= t[n-1].dist_m)   return t[n-1].CD0;
+    for (int i = 0; i + 1 < n; ++i) {
+        if (dist_m >= t[i].dist_m && dist_m <= t[i+1].dist_m) {
+            double frac = (dist_m - t[i].dist_m) / (t[i+1].dist_m - t[i].dist_m);
+            return t[i].CD0 + frac * (t[i+1].CD0 - t[i].CD0);
+        }
+    }
+    return t[n-1].CD0;
 }
 
 // Debug telemetry from the drag calculation
 struct DragDebug {
     double omega_rads;   // angular velocity (rad/s)
     double spin_param;   // S = r*omega/v (dimensionless)
-    double CD_eff;       // effective drag coefficient used
+    double CD0_used;     // distance-dependent baseline before spin correction
+    double CD_eff;       // effective drag coefficient after spin correction
     double k_eff;        // drag decay constant (1/m)
 };
 
 // plateMultiplierAdjusted — continuous physics-based drag multiplier.
+// CD0 is looked up from the distance-dependent calibration table.
 // Pass a non-null dbg pointer to capture intermediate values for logging.
 inline double plateMultiplierAdjusted(double dist_m, int spin_rpm,
                                        double pitchRelease_mps,
@@ -85,11 +124,13 @@ inline double plateMultiplierAdjusted(double dist_m, int spin_rpm,
     const double v     = std::max(pitchRelease_mps, 0.1);
     const double omega = spin_rpm * (2.0 * M_PI / 60.0);
     const double S     = drag::kBallRadius_m * omega / v;
-    const double CD    = std::max(0.05, drag::kCD0 - drag::kCDspin * S);
+    const double CD0   = cd0ForDistance(dist_m);
+    const double CD    = std::max(0.05, CD0 - drag::kCDspin * S);
     const double k     = drag::kAeroFactor * CD;
     if (dbg) {
         dbg->omega_rads = omega;
         dbg->spin_param = S;
+        dbg->CD0_used   = CD0;
         dbg->CD_eff     = CD;
         dbg->k_eff      = k;
     }
@@ -153,13 +194,13 @@ inline Outputs computePotential(const Inputs& in, const Coeff batCoeff) {
 #if 0 // Enable for cage debugging
 #include <cstdio>
 inline void debugPrint(const Inputs& in, const Outputs& out) {
-  std::printf("[KIT] d=%.2fm spin=%drpm(%.1frad/s) S=%.4f CD=%.4f k=%.5f/m | "
+  std::printf("[KIT] d=%.2fm spin=%drpm(%.1frad/s) S=%.4f CD0=%.4f CD_eff=%.4f k=%.5f/m | "
               "mult=%.4f Vrel=%.1f Vplate=%.1f | "
               "EV_meas=%.1f EV_pot=%.1f | "
               "Sm_meas=%.3f Sm_pot=%.3f SqUp_raw=%.1f%%\n",
               in.distance_m, in.spin_rpm,
               out.drag.omega_rads, out.drag.spin_param,
-              out.drag.CD_eff, out.drag.k_eff,
+              out.drag.CD0_used, out.drag.CD_eff, out.drag.k_eff,
               out.multiplier_used,
               in.pitchRelease_mps, out.plateVelocity_mps,
               in.EV_measured_mps, out.potentialEV_mps,
