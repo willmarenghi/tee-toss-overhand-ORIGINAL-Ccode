@@ -85,6 +85,7 @@ namespace drag {
         { 14.630, 0.8673 },  // 48ft — PLACEHOLDER: held at 44ft value, needs calibration data
         { 15.240, 0.8673 },  // 50ft — PLACEHOLDER: held at 44ft value, needs calibration data
         { 16.459, 0.8673 },  // 54ft — PLACEHOLDER: held at 44ft value, needs calibration data
+
     };
     inline constexpr int kCD0TableSize = 8;
 }
