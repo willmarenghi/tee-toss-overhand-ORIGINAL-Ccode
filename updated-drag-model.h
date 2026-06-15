@@ -80,7 +80,7 @@ namespace drag {
     // CD_eff = CD0(v, dist) - kCDspin * S,  where S = r*omega/v
     constexpr double kCDspin = 0.9946;
 
-    // 2D CD0 table: two velocity anchors × 8 distances.
+    // 2D CD0 table: two velocity anchors × 9 distances.
     // CD0 interpolates linearly between kVelSlow and kVelFast by release velocity.
     constexpr double kVelSlow_mps = 17.882;  // 40 mph — slow-toss anchor
     constexpr double kVelFast_mps = 40.234;  // 90 mph — fast-pitch anchor
