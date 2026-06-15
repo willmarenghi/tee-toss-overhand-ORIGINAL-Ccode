@@ -93,11 +93,12 @@ namespace drag {
         { 10.668,    0.7654,      0.5199 },  // 35ft — slow: calibrated
         { 12.192,    0.8580,      0.5199 },  // 40ft — slow: calibrated
         { 13.411,    0.8673,      0.5199 },  // 44ft — slow: calibrated
+        { 14.021,    0.8673,      0.5199 },  // 46ft — slow: PLACEHOLDER (needs data)
         { 14.630,    0.8673,      0.5199 },  // 48ft — slow: PLACEHOLDER (needs data)
         { 15.240,    0.8673,      0.5199 },  // 50ft — slow: PLACEHOLDER (needs data)
         { 16.459,    0.8673,      0.5199 },  // 54ft — slow: PLACEHOLDER (needs data)
     };
-    inline constexpr int kCD0TableSize = 8;
+    inline constexpr int kCD0TableSize = 9;
 }
 
 // Returns the 2D CD0 baseline drag coefficient.
@@ -243,9 +244,9 @@ inline void debugPrint(const Inputs& in, const Outputs& out) {
 // ------------------------------------------------------------
 #ifdef KIT_RUN_TESTS
 
-// Distances to test (ft → m): 25,30,35,40,44,48,50,54
+// Distances to test (ft → m): 25,30,35,40,44,46,48,50,54
 inline constexpr double kTestDists_m[] = {
-    7.620, 9.144, 10.668, 12.192, 13.411, 14.630, 15.240, 16.459
+    7.620, 9.144, 10.668, 12.192, 13.411, 14.021, 14.630, 15.240, 16.459
 };
 inline constexpr int kTestSpins[] = { 1000, 1700, 2600 };          // low, mid, high
 inline constexpr double kTestVelos[] = { 11.18, 17.88, 26.82 };   // 25, 40, 60 mph
