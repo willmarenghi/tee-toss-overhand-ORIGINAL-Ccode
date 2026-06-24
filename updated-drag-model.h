@@ -16,7 +16,7 @@ struct Coeff {
 inline constexpr Coeff kMetal{ /*e*/0.28, /*k_potential*/0.92, /*c*/0.0 };
 inline constexpr Coeff kWood { /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 
-// ACTUAL MODEL NUMBERS
+// CURRENT TEE/TOSS MODEL NUMBERS --> adjust coach bp mode to match???
 //
 // Tee Mode:
 //     Wood e_value = 0.22,  Wood K_potential = 1.21
